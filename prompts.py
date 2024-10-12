@@ -5,10 +5,11 @@ Note:
 - Your output should follow this structure:
 - Score ranging from 0-9, similar to IELTS grading
 - Include at least 3 reference phrases in addition to the original text
+- If user's paraphrase is EMPTY, fill empty string for all criteria
 
 {WRITING_ASSESSMENT_FORMAT}
 original text: {original_text}
-user's paraphrase: {user_paraphrase}
+user's paraphrase: {your_paraphrase}
 
 """
 
