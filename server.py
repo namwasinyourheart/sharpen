@@ -22,8 +22,8 @@ class TranslationInput(BaseModel):
 
 
 @app.get("/")
-def home():
-    return {"message": "AI Writing Assessment API is running!"}
+def hello():
+    return {"message": "Sharpen API is running!"}
 
 @app.post("/grammar-check")
 def grammar_check(input: TextInput):
