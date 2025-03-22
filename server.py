@@ -1,76 +1,56 @@
-# server.py
-from pydantic import BaseModel, Field, validator
-from typing import List
 from fastapi import FastAPI
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_google_genai import GoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
-from prompts import PARAPHRASE_GRADE_PROMPT_TEMPLATE, WRITING_ASSESSMENT_FORMAT
-
-load_dotenv()
-
-class ScoreBase(BaseModel):
-    score: float
-    concerns: List[str]
-
-    @validator("score")
-    def validate_score(cls, v):
-        if not isinstance(v, (int, float)) or not (0 <= v <= 10):
-            raise ValueError("Score must be a number between 0 and 10.")
-        return v
-
-class TaskResponse(ScoreBase): pass
-class CohesionAndCoherence(ScoreBase): pass
-class Vocabulary(ScoreBase): pass
-class Grammar(ScoreBase): pass
-
-class Overall(BaseModel):
-    score: float
-    main_issue: str
-
-    @validator("score")
-    def validate_score(cls, v):
-        if not isinstance(v, (int, float)) or not (0 <= v <= 10):
-            raise ValueError("Score must be a number between 0 and 10.")
-        return v
-
-class WritingAssessment(BaseModel):
-    task_response: TaskResponse
-    cohesion_and_coherence: CohesionAndCoherence
-    vocabulary: Vocabulary
-    grammar: Grammar
-    overall: Overall
-    reference_answers: List[str]
-
-    def to_dict(self):
-        return self.dict()
-
-class Input(BaseModel):
-    original_text: str
-    your_paraphrase: str
-
-    def to_dict(self):
-        return self.dict()
+from pydantic import BaseModel
+from typing import Optional
+from chains import (
+    grammar_check_chain, plagiarism_check_chain, translation_chain,
+    word_count_chain, summarization_chain, paraphrasing_chain
+)
 
 app = FastAPI()
 
-def get_llm():
-    return GoogleGenerativeAI(model="models/gemini-1.5-flash", temperature=0, max_tokens=1000)
+# Updated models to include provider and model
+class TextInput(BaseModel):
+    text: str
+    provider: Optional[str] = "google_genai"  # Default provider
+    model: Optional[str] = None  # Model selection
 
-def create_chain():
-    llm = get_llm()
-    prompt = PromptTemplate(template=PARAPHRASE_GRADE_PROMPT_TEMPLATE, partial_variables={"WRITING_ASSESSMENT_FORMAT": WRITING_ASSESSMENT_FORMAT})
-    parser = PydanticOutputParser(pydantic_object=WritingAssessment)
-    return prompt | llm | parser
+class TranslationInput(BaseModel):
+    text: str
+    target_language: str
+    provider: str = "google_genai"
+    model: Optional[str] = None
+
 
 @app.get("/")
-def hello():
-    return {"Hello": "World!"}
+def home():
+    return {"message": "AI Writing Assessment API is running!"}
 
-@app.post("/assess")
-async def generate_response(input: Input):
-    chain = create_chain()
-    response = chain.invoke(input.to_dict())
-    return response
+@app.post("/grammar-check")
+def grammar_check(input: TextInput):
+    result = grammar_check_chain(input.text, provider=input.provider, model=input.model)
+    return {"corrected_text": result}
+
+@app.post("/plagiarism-check")
+def plagiarism_check(input: TextInput):
+    result = plagiarism_check_chain(input.text, provider=input.provider, model=input.model)
+    return {"plagiarism_result": result}
+
+@app.post("/translate")
+def translate(input: TranslationInput):
+    result = translation_chain(input.text, input.target_language, provider=input.provider, model=input.model)
+    return {"translated_text": result}
+
+@app.post("/word-count")
+def word_count(input: TextInput):
+    result = word_count_chain(input.text)
+    return {"word_count": result}
+
+@app.post("/summarize")
+def summarize(input: TextInput):
+    result = summarization_chain(input.text, provider=input.provider, model=input.model)
+    return {"summary": result}
+
+@app.post("/paraphrase")
+def paraphrase(input: TextInput):
+    result = paraphrasing_chain(input.text, provider=input.provider, model=input.model)
+    return {"paraphrased_text": result}
