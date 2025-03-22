@@ -43,7 +43,7 @@ input = {
     "your_paraphrase":your_paraphrase
 }
 
-from fastapi_app import WritingAssessment
+from server import WritingAssessment
 response = requests.post(f"{BACKEND_URL}", json=input)
 assessment = WritingAssessment(**response.json())
 
