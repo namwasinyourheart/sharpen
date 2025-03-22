@@ -1,52 +1,120 @@
-# client.py
-import streamlit as st
+import gradio as gr
 import requests
-from server import WritingAssessment
 
-BACKEND_URL = "http://127.0.0.1:8000/assess"
+BACKEND_URL = "http://127.0.0.1:8000"
 
-st.set_page_config(layout="wide")
-st.title("App for IELTS Paraphrase Scoring")
+# === Utility Function to Call API ===
+ERROR_MESSAGE = "⚠️ Apologies! We encountered an issue processing your request. 🙏 Please try again shortly."
 
-def get_text_input(label):
-    return st.text_area(label, height=200)
-
-def display_score(category, score, concerns):
-    st.subheader(category)
-    st.write("Score:", score)
-    for concern in concerns:
-        st.write(f"- {concern}")
-
-def fetch_assessment(input_data):
+def call_api(endpoint, data):
     try:
-        response = requests.post(BACKEND_URL, json=input_data)
+        response = requests.post(f"{BACKEND_URL}/{endpoint}", json=data)
         response.raise_for_status()
-        return WritingAssessment(**response.json())
+        return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching assessment: {e}")
-        return None
+        return {"error": f"{ERROR_MESSAGE} (Details: {e})"}
 
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("Original Text")
-    orig_text = get_text_input("Enter original text:")
-with col2:
-    st.subheader("Your Paraphrase")
-    your_paraphrase = get_text_input("Let's paraphrase it")
 
-if st.button("Assess Paraphrase"):
-    assessment = fetch_assessment({"original_text": orig_text, "your_paraphrase": your_paraphrase})
-    if assessment:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: display_score("Task Response", assessment.task_response.score, assessment.task_response.concerns)
-        with col2: display_score("Lexical Resource", assessment.vocabulary.score, assessment.vocabulary.concerns)
-        with col3: display_score("Coherence & Cohesion", assessment.cohesion_and_coherence.score, assessment.cohesion_and_coherence.concerns)
-        with col4: display_score("Grammar Range & Accuracy", assessment.grammar.score, assessment.grammar.concerns)
+# === Updated Functions with Provider & Model ===
+def grammar_checker(text, provider, model):
+    return call_api("grammar-check", {"text": text, "provider": provider, "model": model}).get("corrected_text", ERROR_MESSAGE)
+
+def plagiarism_checker(text, provider, model):
+    return call_api("plagiarism-check", {"text": text, "provider": provider, "model": model}).get("plagiarism_result", ERROR_MESSAGE)
+
+def translator(text, target_language, provider, model):
+    return call_api("translate", {
+        "text": text, 
+        "target_language": target_language,
+        "provider": provider,
+        "model": model
+    }).get("translated_text", ERROR_MESSAGE)
+
+def word_counter(text):
+    return call_api("word-count", {"text": text}).get("word_count", ERROR_MESSAGE)
+
+def summarizer(text, provider, model):
+    return call_api("summarize", {"text": text, "provider": provider, "model": model}).get("summary", ERROR_MESSAGE)
+
+def paraphrase(text, provider, model):
+    return call_api("paraphrase", {"text": text, "provider": provider, "model": model}).get("paraphrased_text", ERROR_MESSAGE)
+
+# === Available Providers & Models ===
+PROVIDERS = ["google", "openai", "cohere"]
+MODELS = {
+    "google": ["gemini-1.5-flash"],
+    "openai": ["gpt-4o-mini"],
+    # "cohere": ["Command-R+", "Command-R"]
+}
+
+# === Function to Create UI Tasks ===
+def create_task(tab_name, input_label, button_label, output_label, function, example_inputs, include_provider=False):
+    with gr.Tab(tab_name):
+        gr.Markdown(f"## {tab_name}")
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                input_text = gr.Textbox(label=input_label, placeholder=f"Enter text for {tab_name}", lines=10)
+                inputs = [input_text]
+
+                if include_provider:
+                    with gr.Row():
+                        provider_dropdown = gr.Dropdown(choices=PROVIDERS, label="Choose Provider", value=PROVIDERS[0])
+                        model_dropdown = gr.Dropdown(choices=MODELS[PROVIDERS[0]], label="Choose Model", value=MODELS[PROVIDERS[0]][0])
+
+                    def update_models(provider):
+                        return gr.update(choices=MODELS[provider], value=MODELS[provider][0])
+
+                    provider_dropdown.change(update_models, inputs=[provider_dropdown], outputs=[model_dropdown])
+                    inputs.extend([provider_dropdown, model_dropdown])
+
+                button = gr.Button(button_label)
+
+            with gr.Column(scale=1):
+                output_text = gr.Textbox(label=output_label, interactive=False, lines=10)
+
+        button.click(function, inputs=inputs, outputs=output_text)
+        gr.Examples(examples=example_inputs, inputs=input_text)
+
+# === CREATE THE MAIN INTERFACE ===
+with gr.Blocks() as demo:
+    gr.Markdown("# ✍️ Sharpen: Refine, Enhance, and Perfect Your Writing")
+
+    with gr.Tabs():
+        create_task("Grammar Checker", "Enter text", "Check Grammar", "Checked Grammar", grammar_checker, ["This is an example sentence."], include_provider=True)
         
-        st.subheader("Reference Answers")
-        for answer in assessment.reference_answers:
-            st.write(f"- {answer}")
+        create_task("Plagiarism Checker", "Enter text", "Check Plagiarism", "Plagiarism Check Result", plagiarism_checker, ["The quick brown fox."], include_provider=True)
         
-        st.subheader("Overall Score")
-        st.write("Score:", assessment.overall.score)
-        st.write(assessment.overall.main_issue)
+        # **Translator Tab (with Target Language input)**
+        with gr.Tab("Translator"):
+            gr.Markdown("## Translator")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    input_text = gr.Textbox(label="Enter text", placeholder="Enter text to translate", lines=10)
+                    target_language = gr.Textbox(label="Target Language", placeholder="e.g., French")
+                    with gr.Row():
+                        provider_dropdown = gr.Dropdown(choices=PROVIDERS, label="Choose Provider", value=PROVIDERS[0])
+                        model_dropdown = gr.Dropdown(choices=MODELS[PROVIDERS[0]], label="Choose Model", value=MODELS[PROVIDERS[0]][0])
+
+                    def update_models(provider):
+                        return gr.update(choices=MODELS[provider], value=MODELS[provider][0])
+
+                    provider_dropdown.change(update_models, inputs=[provider_dropdown], outputs=[model_dropdown])
+
+                    button = gr.Button("Translate")
+                
+                with gr.Column(scale=1):
+                    output_text = gr.Textbox(label="Translated Text", interactive=False, lines=10)
+
+            button.click(translator, inputs=[input_text, target_language, provider_dropdown, model_dropdown], outputs=output_text)
+            gr.Examples(examples=["Hello world!"], inputs=input_text)
+        
+        create_task("Summarizer", "Enter text", "Summarize", "Summary", summarizer, ["A long passage."], include_provider=True)
+        
+        create_task("Paraphrase", "Enter text", "Paraphrase", "Paraphrased Text", paraphrase, ["Rewrite this sentence."], include_provider=True)
+
+        create_task("Word Counter", "Enter text", "Count Words", "Word Count", word_counter, ["Count these words."])
+
+# === LAUNCH THE APP ===
+demo.launch()
