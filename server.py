@@ -89,6 +89,7 @@ from fastapi import FastAPI
 app = FastAPI()
 
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 
@@ -99,8 +100,14 @@ from prompts import PARAPHRASE_GRADE_PROMPT_TEMPLATE, WRITING_ASSESSMENT_FORMAT
 
 parser = PydanticOutputParser(pydantic_object=WritingAssessment)
 
+def get_llm():
+    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_tokens=1000)
+    llm = GoogleGenerativeAI(model="models/gemini-1.5-flash", temperature=0, max_tokens=1000)
+    return llm
+
+
 def create_chain():
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    llm = get_llm()
 
     paraphrase_grade_prompt = PromptTemplate(
         template=PARAPHRASE_GRADE_PROMPT_TEMPLATE,
@@ -127,3 +134,9 @@ async def generate_reponse(input: Input):
     # print(response)
 
     return response
+
+
+
+
+# Start server
+# uvicorn server:app --host 127.0.0.1 --port 8000 --reload
