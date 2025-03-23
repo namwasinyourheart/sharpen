@@ -77,7 +77,7 @@ def create_task(tab_name, input_label, button_label, output_label, function, exa
         gr.Examples(examples=example_inputs, inputs=input_text)
 
 # === CREATE THE MAIN INTERFACE ===
-with gr.Blocks() as demo:
+with gr.Blocks(theme=gr.themes.Ocean()) as demo:
     gr.Markdown("# ✍️ Sharpen: Refine, Enhance, and Perfect Your Writing")
 
     with gr.Tabs():
